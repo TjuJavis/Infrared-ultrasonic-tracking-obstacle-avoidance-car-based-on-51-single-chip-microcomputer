@@ -1,0 +1,316 @@
+C51 COMPILER V9.57.0.0   MAIN                                                              09/01/2023 14:07:45 PAGE 1   
+
+
+C51 COMPILER V9.57.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: D:\Engineering Software\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND 
+                    -TABS(2)
+
+line level    source
+
+   1          #include <reg52.h>//51Í·ÎÄ¼þ
+   2          #include <QX_A11.h>//QX_A11ÖÇÄÜÐ¡³µÅäÖÃÎÄ¼þ
+   3          #include <intrins.h>
+   4          bit Timer1Overflow; //¼ÆÊýÆ÷1Òç³ö±êÖ¾Î»
+   5          unsigned char disbuff[4]={0,0,0,0};//ÓÃÓÚ·Ö±ð´æ·Å¾àÀëµÄÖµÃ×£¬ÀåÃ×£¬ºÁÃ×
+   6          unsigned int LeftDistance = 0, RightDistance = 0, FrontDistance = 0; //ÔÆÌ¨²â¾à¾àÀë»º´æ
+   7          unsigned int DistBuf[5] = {0};//distance data buffer
+   8          unsigned char pwm_val_left,pwm_val_right; //ÖÐ¼ä±äÁ¿£¬ÓÃ»§ÇëÎðÐÞ¸Ä¡£
+   9          unsigned char   pwm_left,pwm_right;     //¶¨ÒåPWMÊä³ö¸ßµçÆ½µÄÊ±¼äµÄ±äÁ¿¡£ÓÃ»§²Ù×÷PWMµÄ±äÁ¿¡£
+  10          #define   PWM_DUTY    200     //£¨ÓÃÓÚ¶æ»úÊ±²»¿ÉÐÞ¸Ä£©¶¨ÒåPWMµÄÖÜÆÚ£¬ÊýÖµÎª¶¨Ê±Æ÷0Òç³öÖÜÆÚ£¬¼ÙÈç¶¨Ê±Æ÷Òç³öÊ±¼äÎ
+             -ª100us£¬ÔòPWMÖÜÆÚÎª20ms¡£
+  11          #define   PWM_HIGH_MIN  20      //ÏÞÖÆPWMÊä³öµÄ×îÐ¡Õ¼¿Õ±È¡£ÓÃ»§ÇëÎðÐÞ¸Ä¡£
+  12          #define   PWM_HIGH_MAX  PWM_DUTY  //ÏÞÖÆPWMÊä³öµÄ×î´óÕ¼¿Õ±È¡£ÓÃ»§ÇëÎðÐÞ¸Ä¡£
+  13          
+  14          void Timer0_Init(void); //¶¨Ê±Æ÷0³õÊ¼»¯
+  15          void Timer1_Init(void);//¶¨Ê±Æ÷1³õÊ¼»¯
+  16          void LoadPWM(void);//×°ÈëPWMÊä³öÖµ 
+  17          void Delay_Ms(unsigned int ms);//ºÁÃë¼¶ÑÓÊ±º¯Êý
+  18          void forward(unsigned char LeftSpeed,unsigned char RightSpeed);//QX_A11ÖÇÄÜÐ¡³µÇ°½ø 
+  19          void left_run(unsigned char LeftSpeed,unsigned char RightSpeed);//QX_A11ÖÇÄÜÐ¡³µ×ó×ª  
+  20          void right_run(unsigned char LeftSpeed,unsigned char RightSpeed);//QX_A11ÖÇÄÜÐ¡³µÓÒ×ª
+  21          //void back_run(unsigned char LeftSpeed,unsigned char RightSpeed);//QX_A11ÖÇÄÜÐ¡³µºóÍË
+  22          void stop(void);//QX_A11ÖÇÄÜÐ¡³µÍ£³µ
+  23          unsigned int QXMBOT_GetDistance(void);//»ñÈ¡³¬Éù²¨¾àÀë
+  24          void QXMBOT_TrigUltrasonic(void);// ´¥·¢³¬Éù²¨
+  25          void Tracking();//ºÚÏßÑ­¼£º¯Êý
+  26          /*Ö÷º¯Êý*/     
+  27          void main(void)
+  28          {
+  29   1        unsigned int Dis;//¾àÀëÔÝ´æ±äÁ¿
+  30   1        unsigned int i;
+  31   1        Timer0_Init();//¶¨Ê±0³õÊ¼»¯
+  32   1        Timer1_Init();//¶¨Ê±0³õÊ¼»¯
+  33   1        EA_on;  //¿ªÖÐ¶Ï
+  34   1        while(1)
+  35   1        {
+  36   2            
+  37   2          for (i = 0; i < 1000;i++) Tracking();//Ñ­»·Ö´ÐÐºÚÏßÑ­¼£´ïµ½ÑÓÊ±Ö´ÐÐ¶ÁÈ¡³¬Éù²¨¾àÀëµÄÐ§¹û£¬³¬Éù²¨²â¾à¼ä¸ôÐ
+             -èÒª´óÓÚ60ms
+  38   2            Dis = QXMBOT_GetDistance();//»ñÈ¡³¬Éù²¨²â¾à¾àÀë,µ¥Î»£ººÁÃ×
+  39   2            if(Dis < 200)//ºÁÃ×
+  40   2            { 
+  41   3              do{
+  42   4                stop(); //Í£³µ
+  43   4                Delay_Ms(100);
+  44   4                Dis = QXMBOT_GetDistance();//»ñÈ¡³¬Éù²¨²â¾à¾àÀë,µ¥Î»£ººÁÃ×
+  45   4              }while(Dis < 200);
+  46   3            }
+  47   2        } 
+  48   1      }
+  49          
+  50          
+  51          /*********************************************
+  52          QX_A11ÖÇÄÜÐ¡³µÇ°½ø
+C51 COMPILER V9.57.0.0   MAIN                                                              09/01/2023 14:07:45 PAGE 2   
+
+  53          Èë¿Ú²ÎÊý£ºLeftSpeed£¬RightSpeed
+  54          ³ö¿Ú²ÎÊý: ÎÞ
+  55          ËµÃ÷£ºLeftSpeed£¬RightSpeed·Ö±ðÉèÖÃ×óÓÒ³µÂÖ×ªËÙ
+  56          **********************************************/
+  57          void forward(unsigned char LeftSpeed,unsigned char RightSpeed)
+  58          {
+  59   1        pwm_left = LeftSpeed,pwm_right =  RightSpeed;//ÉèÖÃËÙ¶È
+  60   1        left_motor_go; //×óµç»úÇ°½ø
+  61   1        right_motor_go; //ÓÒµç»úÇ°½ø
+  62   1      }
+  63          /*Ð¡³µ×ó×ª*/
+  64          /*********************************************
+  65          QX_A11ÖÇÄÜÐ¡³µ×ó×ª
+  66          Èë¿Ú²ÎÊý£ºLeftSpeed£¬RightSpeed
+  67          ³ö¿Ú²ÎÊý: ÎÞ
+  68          ËµÃ÷£ºLeftSpeed£¬RightSpeed·Ö±ðÉèÖÃ×óÓÒ³µÂÖ×ªËÙ
+  69          **********************************************/
+  70          void left_run(unsigned char LeftSpeed,unsigned char RightSpeed)
+  71          {
+  72   1        pwm_left = LeftSpeed,pwm_right =  RightSpeed;//ÉèÖÃËÙ¶È
+  73   1        left_motor_back; //×óµç»úºóÍË
+  74   1        right_motor_go; //ÓÒµç»úÇ°½ø  
+  75   1      }
+  76          
+  77          /*********************************************
+  78          QX_A11ÖÇÄÜÐ¡³µÓÒ×ª
+  79          Èë¿Ú²ÎÊý£ºLeftSpeed£¬RightSpeed
+  80          ³ö¿Ú²ÎÊý: ÎÞ
+  81          ËµÃ÷£ºLeftSpeed£¬RightSpeed·Ö±ðÉèÖÃ×óÓÒ³µÂÖ×ªËÙ
+  82          **********************************************/
+  83          void right_run(unsigned char LeftSpeed,unsigned char RightSpeed)
+  84          {
+  85   1        pwm_left = LeftSpeed,pwm_right =  RightSpeed;//ÉèÖÃËÙ¶È
+  86   1        right_motor_back;//ÓÒµç»úºóÍË
+  87   1        left_motor_go;    //×óµç»úÇ°½ø
+  88   1      }
+  89          /*********************************************
+  90          QX_A11ÖÇÄÜÐ¡³µºóÍË
+  91          Èë¿Ú²ÎÊý£ºLeftSpeed£¬RightSpeed
+  92          ³ö¿Ú²ÎÊý: ÎÞ
+  93          ËµÃ÷£ºLeftSpeed£¬RightSpeed·Ö±ðÉèÖÃ×óÓÒ³µÂÖ×ªËÙ
+  94          **********************************************/
+  95          //void back_run(unsigned char LeftSpeed,unsigned char RightSpeed)
+  96          //{
+  97          //  pwm_left = LeftSpeed,pwm_right =  RightSpeed;//ÉèÖÃËÙ¶È
+  98          //  right_motor_back;//ÓÒµç»úºóÍË
+  99          //  left_motor_back; //×óµç»úºóÍË
+ 100          //}
+ 101          /*********************************************
+ 102          QX_A11ÖÇÄÜÐ¡³µÍ£³µ
+ 103          Èë¿Ú²ÎÊý£ºÎÞ
+ 104          ³ö¿Ú²ÎÊý: ÎÞ
+ 105          ËµÃ÷£ºQX_A11ÖÇÄÜÐ¡³µÍ£³µ
+ 106          **********************************************/
+ 107          void stop(void)
+ 108          {
+ 109   1        left_motor_stops;
+ 110   1        right_motor_stops;
+ 111   1      }
+ 112          
+ 113          /*====================================
+ 114          º¯Êý£ºvoid Delay_Ms(INT16U ms)
+C51 COMPILER V9.57.0.0   MAIN                                                              09/01/2023 14:07:45 PAGE 3   
+
+ 115          ²ÎÊý£ºms£¬ºÁÃëÑÓÊ±ÐÎ²Î
+ 116          ÃèÊö£º12T 51µ¥Æ¬»ú×ÔÊÊÓ¦Ö÷Ê±ÖÓºÁÃë¼¶ÑÓÊ±º¯Êý
+ 117          ====================================*/
+ 118          void Delay_Ms(unsigned int ms)
+ 119          {
+ 120   1           unsigned int i;
+ 121   1         do{
+ 122   2              i = MAIN_Fosc / 96000; 
+ 123   2            while(--i);   //96T per loop
+ 124   2           }while(--ms);
+ 125   1      }
+ 126          /*********************************************
+ 127          QX_A11ÖÇÄÜÐ¡³µPWMÊä³ö
+ 128          Èë¿Ú²ÎÊý£ºÎÞ
+ 129          ³ö¿Ú²ÎÊý: ÎÞ
+ 130          ËµÃ÷£º×°ÔØPWMÊä³ö,Èç¹ûÉèÖÃÈ«¾Ö±äÁ¿pwm_left,pwm_right·Ö±ðÅäÖÃ×óÓÒÊä³ö¸ßµçÆ½Ê±¼ä
+ 131          **********************************************/
+ 132          void LoadPWM(void)
+ 133          {
+ 134   1        if(pwm_left > PWM_HIGH_MAX)   pwm_left = PWM_HIGH_MAX;  //Èç¹û×óÊä³öÐ´Èë´óÓÚ×î´óÕ¼¿Õ±ÈÊý¾Ý£¬ÔòÇ¿ÖÆÎª×î´óÕ¼¿
+             -Õ±È¡£
+ 135   1        if(pwm_left < PWM_HIGH_MIN)   pwm_left = PWM_HIGH_MIN;  //Èç¹û×óÊä³öÐ´ÈëÐ¡ÓÚ×îÐ¡Õ¼¿Õ±ÈÊý¾Ý£¬ÔòÇ¿ÖÆÎª×îÐ¡Õ¼¿
+             -Õ±È¡£
+ 136   1        if(pwm_right > PWM_HIGH_MAX)  pwm_right = PWM_HIGH_MAX; //Èç¹ûÓÒÊä³öÐ´Èë´óÓÚ×î´óÕ¼¿Õ±ÈÊý¾Ý£¬ÔòÇ¿ÖÆÎª×î´óÕ¼
+             -¿Õ±È¡£
+ 137   1        if(pwm_right < PWM_HIGH_MIN)  pwm_right = PWM_HIGH_MIN; //Èç¹ûÓÒÊä³öÐ´ÈëÐ¡ÓÚ×îÐ¡Õ¼¿Õ±ÈÊý¾Ý£¬ÔòÇ¿ÖÆÎª×îÐ¡Õ¼
+             -¿Õ±È¡£
+ 138   1        if(pwm_val_left<=pwm_left)    Left_moto_pwm = 1;  //×°ÔØ×óPWMÊä³ö¸ßµçÆ½Ê±¼ä
+ 139   1        else Left_moto_pwm = 0;                 //×°ÔØ×óPWMÊä³öµÍµçÆ½Ê±¼ä
+ 140   1        if(pwm_val_left>=PWM_DUTY)    pwm_val_left = 0; //Èç¹û×ó¶Ô±ÈÖµ´óÓÚµÈÓÚ×î´óÕ¼¿Õ±ÈÊý¾Ý£¬ÔòÎªÁã
+ 141   1      
+ 142   1        if(pwm_val_right<=pwm_right)  Right_moto_pwm = 1; //×°ÔØÓÒPWMÊä³ö¸ßµçÆ½Ê±¼ä
+ 143   1        else Right_moto_pwm = 0;              //×°ÔØÓÒPWMÊä³öµÍµçÆ½Ê±¼ä
+ 144   1        if(pwm_val_right>=PWM_DUTY)   pwm_val_right = 0;  //Èç¹ûÓÒ¶Ô±ÈÖµ´óÓÚµÈÓÚ×î´óÕ¼¿Õ±ÈÊý¾Ý£¬ÔòÎªÁã
+ 145   1      }
+ 146          /*³¬Éù²¨´¥·¢*/
+ 147          void QXMBOT_TrigUltrasonic()
+ 148          {
+ 149   1        TrigPin = 0; //³¬Éù²¨Ä£¿éTrig ¿ØÖÆ¶Ë
+ 150   1        _nop_();
+ 151   1        _nop_();
+ 152   1        _nop_();
+ 153   1        _nop_();
+ 154   1        _nop_();
+ 155   1        TrigPin = 1; //³¬Éù²¨Ä£¿éTrig ¿ØÖÆ¶Ë
+ 156   1        _nop_();_nop_();_nop_();_nop_();_nop_();
+ 157   1        _nop_();_nop_();_nop_();_nop_();_nop_();
+ 158   1        _nop_();_nop_();_nop_();_nop_();_nop_();
+ 159   1        TrigPin = 0; //³¬Éù²¨Ä£¿éTrig ¿ØÖÆ¶Ë
+ 160   1      }
+ 161          /*====================================
+ 162          º¯ÊýÃû  £ºQXMBOT_GetDistance
+ 163          ²ÎÊý  £ºÎÞ
+ 164          ·µ»ØÖµ  £º»ñÈ¡¾àÀëµ¥Î»ºÁÃ×
+ 165          ÃèÊö  £º³¬Éù²¨²â¾à
+ 166          Í¨¹ý·¢ÉäÐÅºÅµ½ÊÕµ½»ØÏìÐÅºÅµÄÊ±¼ä²âÊÔ¾àÀë
+ 167          µ¥Æ¬»ú¾§Õñ11.0592Mhz
+ 168          ×¢Òâ²â¾àÖÜÆÚÎª60msÒÔÉÏ
+ 169          ====================================*/
+ 170          unsigned int QXMBOT_GetDistance()
+ 171          {
+ 172   1        unsigned int Distance = 0;  //³¬Éù²¨¾àÀë
+C51 COMPILER V9.57.0.0   MAIN                                                              09/01/2023 14:07:45 PAGE 4   
+
+ 173   1        unsigned int  Time=0;   //ÓÃÓÚ´æ·Å¶¨Ê±Æ÷Ê±¼äÖµ
+ 174   1        QXMBOT_TrigUltrasonic();  //³¬Éù²¨´¥·¢
+ 175   1        while(!EchoPin);    //ÅÐ¶Ï»ØÏìÐÅºÅÊÇ·ñÎªµÍµçÆ½
+ 176   1        Timer1On;     //Æô¶¯¶¨Ê±Æ÷1
+ 177   1        while(EchoPin);   //µÈ´ýÊÕµ½»ØÏìÐÅºÅ
+ 178   1        Timer1Off;      //¹Ø±Õ¶¨Ê±Æ÷1
+ 179   1        Time=TH1*256+TL1; //¶ÁÈ¡Ê±¼ä
+ 180   1        TH1=0;
+ 181   1        TL1=0;        //Çå¿Õ¶¨Ê±Æ÷
+ 182   1          Distance = (float)(Time*1.085)*0.17;//Ëã³öÀ´ÊÇMM
+ 183   1        return(Distance);//·µ»Ø¾àÀë       
+ 184   1      }
+ 185          
+ 186          void Tracking()//ºÚÏßÑ­¼£º¯Êý
+ 187          {
+ 188   1        char data1, data2 = right_led2, data3 = right_led1, data4 = left_led1, data5 = left_led2;
+ 189   1        data1 = data2 * 1000 + data3 * 100 + data4 * 10 + data5;
+ 190   1      
+ 191   1        switch (data1)
+ 192   1        {
+ 193   2        case 0: // ÔÚºÚÏßÉÏ£¬Ç°½ø
+ 194   2        case 1001:
+ 195   2          forward(39, 37); // Ç°½ø
+ 196   2          break;
+ 197   2        case 100: // Ð¡·ùÆ«ÓÒ£¬×ó×ª
+ 198   2          left_run(37, 40);
+ 199   2          while (1)
+ 200   2          {
+ 201   3            if (/*data1 == 0 || */data1 == 100 || data1 == 10) break;
+ 202   3          }
+ 203   2          //left_run(31, 35); // ×ó×ª
+ 204   2          //forward(32, 31);
+ 205   2          break;
+ 206   2        case 10: // Ð¡·ùÆ«×ó£¬ÓÒ×ª
+ 207   2          right_run(42, 37);
+ 208   2          while (1)
+ 209   2          {
+ 210   3            if (/*data1 == 0 || */data1 == 10 || data1 == 100) break;
+ 211   3          }
+ 212   2          //right_run(42, 31); // ÓÒ×ª
+ 213   2          //forward(52, 41);
+ 214   2          break;
+ 215   2        case 1100: // ´ó·ùÆ«ÓÒ£¬×ó×ª
+ 216   2          
+ 217   2          //if (data1 == 1110 || data1 == 1111 || data1 == 1001 || data1 == 110 || data1 == 1111) forward(40, 40);
+ 218   2          left_run(40, 50); // ×ó×ª
+ 219   2          break;
+ 220   2        case 1000: // ×ó¼±×ªÍä
+ 221   2          //Delay_Ms(5);
+ 222   2          left_run(60, 60); // ×ó×ª
+ 223   2          break;
+ 224   2        case 1010: // ÓÒ¼±×ªÍä
+ 225   2          left_run(50, 60); // ÓÒ×ª
+ 226   2          break;
+ 227   2        case 11: // ´ó·ùÆ«×ó£¬ÓÒ×ª
+ 228   2          
+ 229   2          right_run(52, 40);
+ 230   2          //right_run(62, 60);
+ 231   2          //right_run(44, 34); // ÓÒ×ª
+ 232   2          break;
+ 233   2        case 1: // ÓÒ¼±×ªÍä
+ 234   2          
+C51 COMPILER V9.57.0.0   MAIN                                                              09/01/2023 14:07:45 PAGE 5   
+
+ 235   2          right_run(60, 60); // ÓÒ×ª
+ 236   2      
+ 237   2          break;
+ 238   2        case 111:
+ 239   2        case 110:
+ 240   2        case 1110:
+ 241   2          left_run(60, 60);
+ 242   2          break;
+ 243   2        default:
+ 244   2          break;
+ 245   2        }
+ 246   1      }
+ 247          
+ 248          /********************* Timer0³õÊ¼»¯************************/
+ 249          void Timer0_Init(void)
+ 250          {
+ 251   1        TMOD |= 0x02;//¶¨Ê±Æ÷0£¬8Î»×Ô¶¯ÖØ×°Ä£¿é
+ 252   1        TH0 = 0X9C;
+ 253   1        TL0 = 0X9C;//11.0592M¾§Õñ£¬12TÒç³öÊ±¼äÔ¼µÈÓÚ100Î¢Ãë
+ 254   1        TR0 = 1;//Æô¶¯¶¨Ê±Æ÷0
+ 255   1        ET0 = 1;//ÔÊÐí¶¨Ê±Æ÷0ÖÐ¶Ï 
+ 256   1      }
+ 257          /*¶¨Ê±Æ÷1³õÊ¼»¯*/
+ 258          void Timer1_Init(void)    
+ 259          {
+ 260   1        TMOD |= 0x10; //¶¨Ê±Æ÷1¹¤×÷Ä£Ê½1,16Î»¶¨Ê±Ä£Ê½¡£T1ÓÃ²âECH0Âö³å³¤¶È
+ 261   1        TH1 = 0;       
+ 262   1          TL1 = 0;
+ 263   1        ET1 = 1;             //ÔÊÐíT1ÖÐ¶Ï
+ 264   1      }
+ 265           
+ 266          /********************* Timer0ÖÐ¶Ïº¯Êý************************/
+ 267          void timer0_int (void) interrupt 1
+ 268          {
+ 269   1         pwm_val_left++;
+ 270   1         pwm_val_right++;
+ 271   1         LoadPWM();//×°ÔØPWMÊä³ö
+ 272   1      }
+ 273          /* Timer0 interrupt routine */
+ 274          void tm1_isr() interrupt 3 using 1
+ 275          {
+ 276   1        Timer1Overflow = 1; //¼ÆÊýÆ÷1Òç³ö±êÖ¾Î»
+ 277   1        EchoPin = 0;    //³¬Éù²¨½ÓÊÕ¶Ë  
+ 278   1      } 
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    520    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     24       2
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      1    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
